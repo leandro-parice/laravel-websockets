@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\GameSquareClicked;
+use App\Events\GameStatusUpdated;
 use App\Models\Game;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -46,9 +48,41 @@ class GameController extends Controller
         return redirect()->route('games.play', $game->id);
     }
 
+    public function join($id)
+    {
+        $user = Auth::user();
+
+        $status = 'playing';
+
+        $game = Game::with(['user1', 'user2'])
+            ->where('id', $id)
+            ->whereNull('user_2')
+            ->where('status', 'waiting')
+            ->first();
+
+        $game->user_2 = $user->id;
+        $game->status = $status;
+        $game->save();
+
+        broadcast(new GameStatusUpdated($game, $status, $user));
+
+        return redirect()->route('games.play', $game->id);
+    }
+
     public function play($id)
     {
         $game = Game::with(['user1', 'user2'])->findOrFail($id);
         return Inertia::render('Game/Play', compact('game'));
+    }
+
+    public function squareClick(Request $request, $id)
+    {
+        $order = intval($request->order);
+        $user = Auth::user();
+        $game = Game::with(['user1', 'user2'])->findOrFail($id);
+
+        broadcast(new GameSquareClicked($game, $user, $order));
+
+        return response()->json(['status' => 'event broadcasted']);
     }
 }

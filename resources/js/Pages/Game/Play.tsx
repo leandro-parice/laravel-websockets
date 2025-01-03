@@ -1,14 +1,31 @@
 import Board from "@/Components/Game/Board";
 import Authenticated from "@/Layouts/AuthenticatedLayout";
-import { Head } from "@inertiajs/react";
-import React from "react";
-import { Game } from "@/types/interfaces";
+import { Head, Link } from "@inertiajs/react";
+import React, { useEffect, useState } from "react";
+import { Game, User } from "@/types/interfaces";
 
 interface Props {
     game: Game;
 }
 
+interface GameStatusUpdatedInterface {
+    game: Game;
+    user: User;
+    status: string;
+}
+
+
+
 const GamePlay: React.FC<Props> = ({game}) => {
+    const [currentGame, setCurrentGame] = useState(game);
+
+    useEffect(() => {
+        window.Echo.channel(`game.${currentGame.id}`)
+            .listen('GameStatusUpdated', (event: GameStatusUpdatedInterface) => {
+                setCurrentGame(event.game);
+            });
+    }, []);
+
     return (
         <Authenticated 
             header={
@@ -22,8 +39,8 @@ const GamePlay: React.FC<Props> = ({game}) => {
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     <div className="overflow-hidden bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg">
                         <div className="p-6 text-gray-900 dark:text-gray-100">
-                            <p>{game.user1.name} x {game.user2 ? game.user2.name : 'Aguardando adversário'}</p>
-                            <Board />    
+                            <p>{currentGame.user1.name} x {currentGame.user2 ? currentGame.user2.name : 'Aguardando adversário'}</p>
+                            <Board game={game} />
                         </div>
                     </div>
                 </div>

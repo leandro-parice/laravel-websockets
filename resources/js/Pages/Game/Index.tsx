@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { Game, User } from "@/types/interfaces";
+import { Game } from "@/types/interfaces";
 
 interface Props {
     games: Game[];
@@ -10,7 +10,6 @@ interface Props {
 }
 
 const GameIndex: React.FC<Props> = ({ games, activeGame, canCreateGame }) => {
-
     const renderButton = (game: Game) => {
         if (game.status === 'playing') {
             if(activeGame && activeGame.id === game.id){
@@ -24,7 +23,7 @@ const GameIndex: React.FC<Props> = ({ games, activeGame, canCreateGame }) => {
             }
         } else if (game.status === 'waiting' && !activeGame) {
             return (
-                <Link href={`/games/${game.id}/play`} className="text-blue-500 hover:underline">Entrar no jogo</Link>
+                <Link href={`/games/${game.id}/join`} className="text-blue-500 hover:underline">Entrar no jogo</Link>
             );
         } else if (game.status === 'finished') {
             return (

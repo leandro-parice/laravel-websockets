@@ -1,6 +1,8 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Square from "./Square";
+import { Game, User } from "@/types/interfaces";
+import { usePage } from "@inertiajs/react";
 
 type Player = 'X' | 'O' | null;
 
@@ -9,21 +11,73 @@ interface Move {
     currentPlayer: Player;
 }
 
-const Board: React.FC = () => {
+interface Props {
+    game: Game;
+}
+
+interface GameSquareClickedInterface {
+    game: Game;
+    user: User;
+    order: number;
+}
+
+const Board: React.FC<Props> = ({game}) => {
     const [squares, setSquares] = useState<Player[]>(Array(9).fill(null));
     const [currentPlayer, setCurrentPlayer] = useState<Player>('X');
-    const [history, setHistory] = useState<Move[]>([]);
+    const user = usePage().props.auth.user;
 
-    const handleClick = (index: number) => {
+    useEffect(() => {
+        const channel = window.Echo.channel(`game.${game.id}`);
+
+        channel.listen('GameSquareClicked', (event: GameSquareClickedInterface) => {
+            if (event.user.id !== user.id) {
+                console.log('Evento recebido:', event);
+                updateSquares(event.order);
+            }
+        });
+
+        return () => {
+            channel.stopListening('GameSquareClicked');
+        };
+    }, [game.id, user.id]);
+
+    const handleClick = async (index: number) => {
+        if(game.user1.id === user.id && currentPlayer === 'O') return;
+        
+        if(game.user2 && game.user2.id === user.id && currentPlayer === 'X') return;
+
         if (squares[index] || calculateWinner(squares)) return;
+        
+        if (currentPlayer !== (user.id === game.user1.id ? 'X' : 'O')) return;
 
-        const newSquares = [...squares];
-        newSquares[index] = currentPlayer;
+        updateSquares(index);
 
-        setHistory([...history, { board: [...squares], currentPlayer }]);
+        try {
+            const response = await fetch(`/games/${game.id}/square-click`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ order: index }),
+            });
 
-        setSquares(newSquares);
-        setCurrentPlayer(currentPlayer === 'X' ? 'O' : 'X');
+            const result = await response.json();
+            console.log(result);
+        } catch (error) {
+            console.error("Erro ao enviar evento:", error);
+        }
+    };
+
+    const updateSquares = (index: number) => {
+        setSquares((prevSquares) => {
+            const newSquares = [...prevSquares];
+            
+            newSquares[index] = currentPlayer;
+            return newSquares;
+        });
+        
+        setCurrentPlayer((prevPlayer) => (prevPlayer === 'X' ? 'O' : 'X'));
     };
 
     const calculateWinner = (squares: Player[]) => {
@@ -46,12 +100,6 @@ const Board: React.FC = () => {
         return null;
     };
 
-    const resetGame = () => {
-        setSquares(Array(9).fill(null));
-        setCurrentPlayer('X');
-        setHistory([]);
-    };
-
     const checkDraw = (squares: Player[]): boolean => {
         return squares.every((cell) => cell !== null) && !calculateWinner(squares);
     };
@@ -62,33 +110,6 @@ const Board: React.FC = () => {
         ? `Vencedor: ${winner}`
         : isDraw ? 'Empatou' : `Próximo jogador: ${currentPlayer === 'X' ? 'X' : 'O'}`;
 
-        // const finishGame = async (winner: string) => {
-        //     try {
-        //         const response = await fetch(`/games/${gameId}/finish`, {
-        //             method: 'POST',
-        //             headers: {
-        //                 'Content-Type': 'application/json',
-        //                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        //             },
-        //             body: JSON.stringify({
-        //                 winner,
-        //                 histories: history.map((move, index) => ({
-        //                     position: index,
-        //                     player: move.currentPlayer,
-        //                 })),
-        //             }),
-        //         });
-        
-        //         if (response.ok) {
-        //             alert('Jogo salvo com sucesso!');
-        //         } else {
-        //             alert('Erro ao salvar o jogo.');
-        //         }
-        //     } catch (error) {
-        //         console.error('Erro ao finalizar o jogo:', error);
-        //     }
-        // };
-
         
     return (
         <div className="flex flex-col items-center">
@@ -98,22 +119,6 @@ const Board: React.FC = () => {
                     <Square key={index} value={square} onClick={() => handleClick(index)} />
                 ))}
             </div>
-            <div className="history">
-                <h2>Histórico</h2>
-                <ul>
-                    {history.map((move, index) => (
-                        <li key={index}>
-                            Jogador: {move.currentPlayer}, Tabuleiro: {JSON.stringify(move.board)}
-                        </li>
-                    ))}
-                </ul>
-            </div>
-            <button
-                onClick={resetGame}
-                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-                Reiniciar
-            </button>
         </div>
     );
 }
