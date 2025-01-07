@@ -25,6 +25,9 @@ const Board: React.FC<Props> = ({game}) => {
     const [squares, setSquares] = useState<Player[]>(Array(9).fill(null));
     const [currentPlayer, setCurrentPlayer] = useState<Player>('X');
     const user = usePage().props.auth.user;
+    const isUser1 = game.user1.id === user.id;
+    const userSymbol: Player = isUser1 ? 'X' : 'O';
+    const opponentSymbol: Player = isUser1 ? 'O' : 'X';
 
     useEffect(() => {
         const channel = window.Echo.channel(`game.${game.id}`);
@@ -32,7 +35,7 @@ const Board: React.FC<Props> = ({game}) => {
         channel.listen('GameSquareClicked', (event: GameSquareClickedInterface) => {
             if (event.user.id !== user.id) {
                 console.log('Evento recebido:', event);
-                updateSquares(event.order);
+                updateSquares(event.order, opponentSymbol);
             }
         });
 
@@ -50,7 +53,7 @@ const Board: React.FC<Props> = ({game}) => {
         
         if (currentPlayer !== (user.id === game.user1.id ? 'X' : 'O')) return;
 
-        updateSquares(index);
+        updateSquares(index, userSymbol);
 
         try {
             const response = await fetch(`/games/${game.id}/square-click`, {
@@ -69,11 +72,11 @@ const Board: React.FC<Props> = ({game}) => {
         }
     };
 
-    const updateSquares = (index: number) => {
+    const updateSquares = (index: number, symbol: Player) => {
         setSquares((prevSquares) => {
             const newSquares = [...prevSquares];
             
-            newSquares[index] = currentPlayer;
+            newSquares[index] = symbol;
             return newSquares;
         });
         
