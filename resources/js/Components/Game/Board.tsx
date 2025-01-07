@@ -23,18 +23,21 @@ interface GameSquareClickedInterface {
 
 const Board: React.FC<Props> = ({game}) => {
     const [squares, setSquares] = useState<Player[]>(Array(9).fill(null));
-    const [currentPlayer, setCurrentPlayer] = useState<Player>('X');
     const user = usePage().props.auth.user;
     const isUser1 = game.user1.id === user.id;
-    const userSymbol: Player = isUser1 ? 'X' : 'O';
+    const isWatching = game.user2 && (user.id !== game.user1.id && user.id !== game.user2.id);
     const opponentSymbol: Player = isUser1 ? 'O' : 'X';
 
     useEffect(() => {
-        const channel = window.Echo.channel(`game.${game.id}`);
+        const initialSquares = Array(9).fill(null);
+        game.moves.forEach((move) => {
+            initialSquares[move.position] = move.user_id === game.user1.id ? 'X' : 'O';
+        });
+        setSquares(initialSquares);
 
+        const channel = window.Echo.channel(`game.${game.id}`);
         channel.listen('GameSquareClicked', (event: GameSquareClickedInterface) => {
             if (event.user.id !== user.id) {
-                console.log('Evento recebido:', event);
                 updateSquares(event.order, opponentSymbol);
             }
         });
@@ -42,16 +45,16 @@ const Board: React.FC<Props> = ({game}) => {
         return () => {
             channel.stopListening('GameSquareClicked');
         };
-    }, [game.id, user.id]);
+    }, [game, user.id]);
 
     const handleClick = async (index: number) => {
-        if(game.user1.id === user.id && currentPlayer === 'O') return;
-        
-        if(game.user2 && game.user2.id === user.id && currentPlayer === 'X') return;
-
+        if(!game.user2 || isWatching) return;
         if (squares[index] || calculateWinner(squares)) return;
-        
-        if (currentPlayer !== (user.id === game.user1.id ? 'X' : 'O')) return;
+
+        const currentPlayer = calculateCurrentPlayer();
+        const userSymbol = user.id === game.user1.id ? 'X' : 'O';
+
+        if (currentPlayer !== userSymbol) return;
 
         updateSquares(index, userSymbol);
 
@@ -66,7 +69,6 @@ const Board: React.FC<Props> = ({game}) => {
             });
 
             const result = await response.json();
-            console.log(result);
         } catch (error) {
             console.error("Erro ao enviar evento:", error);
         }
@@ -79,8 +81,11 @@ const Board: React.FC<Props> = ({game}) => {
             newSquares[index] = symbol;
             return newSquares;
         });
-        
-        setCurrentPlayer((prevPlayer) => (prevPlayer === 'X' ? 'O' : 'X'));
+    };
+
+    const calculateCurrentPlayer = (): Player => {
+        const movesCount = squares.filter((square) => square !== null).length;
+        return movesCount % 2 === 0 ? 'X' : 'O';
     };
 
     const calculateWinner = (squares: Player[]) => {
@@ -97,6 +102,10 @@ const Board: React.FC<Props> = ({game}) => {
         for (let line of lines) {
             const [a, b, c] = line;
             if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
+                const userSymbol = user.id === game.user1.id ? 'X' : 'O';
+                if(squares[a] === userSymbol){
+                    finishGame('winner', user.id);
+                }
                 return squares[a];
             }
         }
@@ -104,14 +113,38 @@ const Board: React.FC<Props> = ({game}) => {
     };
 
     const checkDraw = (squares: Player[]): boolean => {
-        return squares.every((cell) => cell !== null) && !calculateWinner(squares);
+        const isDraw = squares.every((cell) => cell !== null) && !calculateWinner(squares);
+
+        if(isDraw){
+            finishGame('draw', 0);
+        }
+
+        return isDraw;
+    };
+
+    const finishGame = async (resultGame: string, winner: number) => {
+        try {
+            const response = await fetch(`/games/${game.id}/finish`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ gameId: game.id, resultGame, winner}),
+            });
+
+            const result = await response.json();
+            console.log(result);
+        } catch (error) {
+            console.error("Erro ao enviar evento:", error);
+        }
     };
 
     const winner = calculateWinner(squares);
     const isDraw = checkDraw(squares);
     const status = winner
         ? `Vencedor: ${winner}`
-        : isDraw ? 'Empatou' : `Próximo jogador: ${currentPlayer === 'X' ? 'X' : 'O'}`;
+        : isDraw ? 'Empatou' : `Próximo jogador: ${calculateCurrentPlayer()}`;
 
         
     return (

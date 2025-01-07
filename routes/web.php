@@ -25,6 +25,7 @@ Route::get('/games/create', [GameController::class, 'create'])->name('games.crea
 Route::get('/games/{id}/join', [GameController::class, 'join'])->name('games.join');
 Route::get('/games/{id}/play', [GameController::class, 'play'])->middleware(['auth', 'verified'])->name('games.play');
 Route::post('/games/{id}/square-click', [GameController::class, 'squareClick'])->middleware(['auth', 'verified'])->name('games.square.click');
+Route::post('/games/{id}/finish', [GameController::class, 'finishGame'])->middleware(['auth', 'verified'])->name('games.finish');
 
 // Route::get('/test', [TestController::class, 'index'])->middleware(['auth', 'verified'])->name('test.index');
 

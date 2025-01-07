@@ -20,11 +20,15 @@ const GamePlay: React.FC<Props> = ({game}) => {
     const [currentGame, setCurrentGame] = useState(game);
 
     useEffect(() => {
-        window.Echo.channel(`game.${currentGame.id}`)
-            .listen('GameStatusUpdated', (event: GameStatusUpdatedInterface) => {
-                setCurrentGame(event.game);
-            });
-    }, []);
+        const channel = window.Echo.channel(`game.${game.id}`);
+        channel.listen('GameStatusUpdated', (event: GameStatusUpdatedInterface) => {
+            setCurrentGame(event.game);
+        });
+
+        return () => {
+            channel.stopListening('GameStatusUpdated');
+        };
+    }, [game]);
 
     return (
         <Authenticated 
