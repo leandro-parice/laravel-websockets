@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Square from "./Square";
 import { Game, User } from "@/types/interfaces";
 import { usePage } from "@inertiajs/react";
@@ -21,17 +21,22 @@ interface GameSquareClickedInterface {
     order: number;
 }
 
+interface GameStatusUpdatedInterface{
+    game: Game;
+}
+
 const Board: React.FC<Props> = ({game}) => {
+    const [currentGame, setCurrentGame] = useState(game);
     const [squares, setSquares] = useState<Player[]>(Array(9).fill(null));
     const user = usePage().props.auth.user;
-    const isUser1 = game.user1.id === user.id;
-    const isWatching = game.user2 && (user.id !== game.user1.id && user.id !== game.user2.id);
+    const isUser1 = currentGame.user1.id === user.id;
+    const isWatching = currentGame.user2 && user.id !== currentGame.user1.id && user.id !== currentGame.user2.id;
     const opponentSymbol: Player = isUser1 ? 'O' : 'X';
 
     useEffect(() => {
         const initialSquares = Array(9).fill(null);
-        game.moves.forEach((move) => {
-            initialSquares[move.position] = move.user_id === game.user1.id ? 'X' : 'O';
+        currentGame.moves.forEach((move) => {
+            initialSquares[move.position] = move.user_id === currentGame.user1.id ? 'X' : 'O';
         });
         setSquares(initialSquares);
 
@@ -41,25 +46,30 @@ const Board: React.FC<Props> = ({game}) => {
                 updateSquares(event.order, opponentSymbol);
             }
         });
+        channel.listen('GameStatusUpdated', (event: GameStatusUpdatedInterface) => {
+            setCurrentGame(event.game);
+        });
 
         return () => {
             channel.stopListening('GameSquareClicked');
+            channel.stopListening('GameStatusUpdated');
         };
-    }, [game, user.id]);
+    }, [game]);
 
     const handleClick = async (index: number) => {
-        if(!game.user2 || isWatching) return;
+        console.log('clicou', currentGame);
+        if(!currentGame.user2 || isWatching || currentGame.status !== 'playing') return;
         if (squares[index] || calculateWinner(squares)) return;
 
         const currentPlayer = calculateCurrentPlayer();
-        const userSymbol = user.id === game.user1.id ? 'X' : 'O';
+        const userSymbol = user.id === currentGame.user1.id ? 'X' : 'O';
 
         if (currentPlayer !== userSymbol) return;
 
         updateSquares(index, userSymbol);
 
         try {
-            const response = await fetch(`/games/${game.id}/square-click`, {
+            const response = await fetch(`/games/${currentGame.id}/square-click`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -69,6 +79,7 @@ const Board: React.FC<Props> = ({game}) => {
             });
 
             const result = await response.json();
+            console.log(result);
         } catch (error) {
             console.error("Erro ao enviar evento:", error);
         }
@@ -102,7 +113,7 @@ const Board: React.FC<Props> = ({game}) => {
         for (let line of lines) {
             const [a, b, c] = line;
             if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-                const userSymbol = user.id === game.user1.id ? 'X' : 'O';
+                const userSymbol = user.id === currentGame.user1.id ? 'X' : 'O';
                 if(squares[a] === userSymbol){
                     finishGame('winner', user.id);
                 }
@@ -124,13 +135,13 @@ const Board: React.FC<Props> = ({game}) => {
 
     const finishGame = async (resultGame: string, winner: number) => {
         try {
-            const response = await fetch(`/games/${game.id}/finish`, {
+            const response = await fetch(`/games/${currentGame.id}/finish`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
-                body: JSON.stringify({ gameId: game.id, resultGame, winner}),
+                body: JSON.stringify({ gameId: currentGame.id, resultGame, winner}),
             });
 
             const result = await response.json();

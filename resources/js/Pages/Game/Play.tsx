@@ -10,8 +10,6 @@ interface Props {
 
 interface GameStatusUpdatedInterface {
     game: Game;
-    user: User;
-    status: string;
 }
 
 

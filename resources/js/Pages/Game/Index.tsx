@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import { Game } from "@/types/interfaces";
 
@@ -9,7 +9,33 @@ interface Props {
     canCreateGame: boolean;
 }
 
+interface GamesStatusUpdatedInterface{
+    game: Game;
+}
+
 const GameIndex: React.FC<Props> = ({ games, activeGame, canCreateGame }) => {
+    const [gameList, setGameList] = useState<Game[]>(games);
+    useEffect(() => {
+        const channel = window.Echo.channel(`games`);
+        channel.listen('GamesStatusUpdated', (event: GamesStatusUpdatedInterface) => {
+            setGameList((prevGames) => {
+                const gameIndex = prevGames.findIndex((game) => game.id === event.game.id);
+
+                if (gameIndex !== -1) {
+                    const updatedGames = [...prevGames];
+                    updatedGames[gameIndex] = { ...prevGames[gameIndex], ...event.game };
+                    return updatedGames;
+                } else {
+                    return [...prevGames, event.game];
+                }
+            });
+        });
+
+        return () => {
+            channel.stopListening('GamesStatusUpdated');
+        };
+    }, []);
+
     const renderButton = (game: Game) => {
         if (game.status === 'playing') {
             if(activeGame && activeGame.id === game.id){
@@ -79,8 +105,8 @@ const GameIndex: React.FC<Props> = ({ games, activeGame, canCreateGame }) => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {games.length > 0 ? (
-                                            games.map((game) => (
+                                        {gameList.length > 0 ? (
+                                            gameList.map((game) => (
                                                 <tr key={game.id} className="even:bg-gray-100 dark:even:bg-gray-700">
                                                     <td className="px-4 py-2 border border-gray-300 dark:border-gray-600">{game.id}</td>
                                                     <td className="px-4 py-2 border border-gray-300 dark:border-gray-600">{game.user1.name}</td>

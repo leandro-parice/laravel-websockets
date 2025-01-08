@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\GameSquareClicked;
+use App\Events\GamesStatusUpdated;
 use App\Events\GameStatusUpdated;
 use App\Models\Game;
 use App\Models\Move;
@@ -46,6 +47,10 @@ class GameController extends Controller
             'status' => 'waiting',
         ]);
 
+        $gameCreated = Game::with(['user1', 'user2'])->findOrFail($game->id);
+
+        broadcast(new GamesStatusUpdated($gameCreated));
+
         return redirect()->route('games.play', $game->id);
     }
 
@@ -65,7 +70,7 @@ class GameController extends Controller
         $game->status = $status;
         $game->save();
 
-        broadcast(new GameStatusUpdated($game, $status, $user));
+        broadcast(new GamesStatusUpdated($game));
 
         return redirect()->route('games.play', $game->id);
     }
@@ -73,6 +78,9 @@ class GameController extends Controller
     public function play($id)
     {
         $game = Game::with(['user1', 'user2', 'moves'])->findOrFail($id);
+
+        broadcast(new GameStatusUpdated($game));
+
         return Inertia::render('Game/Play', compact('game'));
     }
 
@@ -104,6 +112,10 @@ class GameController extends Controller
         $game->result = $resultGame;
         $game->winner_id = $winner;
         $game->save();
+
+        $gameFinished = Game::with(['user1', 'user2'])->findOrFail($game->id);
+
+        broadcast(new GamesStatusUpdated($gameFinished));
 
         return response()->json(['status' => 'game saved']);
     }
