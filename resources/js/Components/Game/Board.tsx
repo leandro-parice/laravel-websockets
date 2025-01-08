@@ -6,11 +6,6 @@ import { usePage } from "@inertiajs/react";
 
 type Player = 'X' | 'O' | null;
 
-interface Move {
-    board: Player[];
-    currentPlayer: Player;
-}
-
 interface Props {
     game: Game;
 }
@@ -34,27 +29,39 @@ const Board: React.FC<Props> = ({game}) => {
     const opponentSymbol: Player = isUser1 ? 'O' : 'X';
 
     useEffect(() => {
-        const initialSquares = Array(9).fill(null);
-        currentGame.moves.forEach((move) => {
-            initialSquares[move.position] = move.user_id === currentGame.user1.id ? 'X' : 'O';
-        });
-        setSquares(initialSquares);
-
+        const syncSquares = () => {
+            const updatedSquares = Array(9).fill(null);
+            currentGame.moves.forEach((move, index) => {
+                // Alterna entre X e O com base na posição do movimento
+                updatedSquares[move.position] = index % 2 === 0 ? 'X' : 'O';
+            });
+            setSquares(updatedSquares);
+        };
+    
+        // Inicializa o tabuleiro com base nos movimentos já realizados
+        syncSquares();
+    
         const channel = window.Echo.channel(`game.${game.id}`);
+    
         channel.listen('GameSquareClicked', (event: GameSquareClickedInterface) => {
-            if (event.user.id !== user.id) {
-                updateSquares(event.order, opponentSymbol);
-            }
+            // Atualiza o tabuleiro com o novo movimento
+            setCurrentGame((prevGame) => ({
+                ...prevGame,
+                moves: [...prevGame.moves, { position: event.order, user_id: event.user.id, game_id: game.id, id: 1 }],
+            }));
+            updateSquares(event.order);
         });
+    
         channel.listen('GameStatusUpdated', (event: GameStatusUpdatedInterface) => {
             setCurrentGame(event.game);
+            syncSquares(); // Recalcula o tabuleiro para espectadores
         });
-
+    
         return () => {
             channel.stopListening('GameSquareClicked');
             channel.stopListening('GameStatusUpdated');
         };
-    }, [game]);
+    }, [game, currentGame]);
 
     const handleClick = async (index: number) => {
         console.log('clicou', currentGame);
@@ -66,7 +73,7 @@ const Board: React.FC<Props> = ({game}) => {
 
         if (currentPlayer !== userSymbol) return;
 
-        updateSquares(index, userSymbol);
+        updateSquares(index);
 
         try {
             const response = await fetch(`/games/${currentGame.id}/square-click`, {
@@ -85,10 +92,12 @@ const Board: React.FC<Props> = ({game}) => {
         }
     };
 
-    const updateSquares = (index: number, symbol: Player) => {
+    const updateSquares = (index: number) => {
         setSquares((prevSquares) => {
             const newSquares = [...prevSquares];
-            
+            const movesCount = prevSquares.filter((square) => square !== null).length;
+            // Alterna o símbolo com base na quantidade de movimentos já realizados
+            const symbol = movesCount % 2 === 0 ? 'X' : 'O';
             newSquares[index] = symbol;
             return newSquares;
         });
